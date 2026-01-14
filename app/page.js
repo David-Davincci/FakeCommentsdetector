@@ -83,7 +83,7 @@ export default function InstagramFakeCommentDetector() {
 
     const handleAnalyze = async () => {
         if (!postUrl.trim()) {
-            setError("Please enter a URL (e.g., 'post1' or 'post2').");
+            setError("Please enter a URL (e.g., 'post1' or 'post2' for demo, or a real Instagram link).");
             return;
         }
 
@@ -92,33 +92,82 @@ export default function InstagramFakeCommentDetector() {
         setResults(null);
 
         try {
-            let postData;
-            if (postUrl.includes('post1')) {
-                postData = samplePosts['post1'];
-            } else if (postUrl.includes('post2')) {
-                postData = samplePosts['post2'];
+            let postCaption = "Unknown Caption";
+            let commentsToAnalyze = [];
+            let isRealScrape = false;
+
+            // 1. Determine Source (Mock vs Real)
+            if (postUrl.includes('post1') || postUrl.includes('post2') || !postUrl.startsWith('http')) {
+                // Demo Mode
+                const demoKey = postUrl.includes('post2') ? 'post2' : 'post1';
+                const postData = samplePosts[demoKey];
+                postCaption = postData.caption;
+                commentsToAnalyze = postData.comments;
+
+                // Set initial results with mock data
+                setResults({
+                    post: postData,
+                    comments: [], // Will fill as we analyze
+                    fakeCount: 0,
+                    totalCount: postData.comments.length,
+                    fakePercentage: 0
+                });
             } else {
-                postData = samplePosts['post1'];
+                // Real Scraping Mode
+                isRealScrape = true;
+                const scrapeResponse = await fetch('/api/scrape', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ postUrl })
+                });
+
+                if (!scrapeResponse.ok) {
+                    const scrapeErr = await scrapeResponse.json();
+                    throw new Error(scrapeErr.error || 'Failed to scrape comments');
+                }
+
+                const scrapeData = await scrapeResponse.json();
+                commentsToAnalyze = scrapeData.comments;
+
+                if (commentsToAnalyze.length === 0) {
+                    throw new Error("No comments found on this post (or account is private).");
+                }
+
+                // Set initial results structure for real data
+                setResults({
+                    post: {
+                        username: 'Instagram User',
+                        caption: 'Real Instagram Post (Caption not visible via basic scrape)',
+                        image: '📸',
+                    },
+                    comments: [],
+                    fakeCount: 0,
+                    totalCount: commentsToAnalyze.length,
+                    fakePercentage: 0
+                });
             }
 
+            // 2. Analyze Comments (Common Logic)
             const analyzedComments = [];
-            for (const comment of postData.comments) {
-                const analyzed = await analyzeCommentWithAI(comment, postData.caption);
+            for (const comment of commentsToAnalyze) {
+                // Determine caption to use (real posts might miss caption in basic scrape, use valid placeholder)
+                const captionContext = isRealScrape ? "Real Instagram Post" : postCaption;
+
+                const analyzed = await analyzeCommentWithAI(comment, captionContext);
                 analyzedComments.push(analyzed);
+
+                // Update results incrementally (optional, but good for UX)
+                const currentFakes = analyzedComments.filter(c => c.isFake).length;
+                setResults(prev => ({
+                    ...prev,
+                    comments: analyzedComments,
+                    fakeCount: currentFakes,
+                    fakePercentage: ((currentFakes / analyzedComments.length) * 100).toFixed(1)
+                }));
             }
 
-            const fakeCount = analyzedComments.filter(c => c.isFake).length;
-            const totalCount = analyzedComments.length;
-
-            setResults({
-                post: postData,
-                comments: analyzedComments,
-                fakeCount,
-                totalCount,
-                fakePercentage: ((fakeCount / totalCount) * 100).toFixed(1)
-            });
         } catch (err) {
-            setError("Analysis failed. Please try again.");
+            setError(err.message || "Analysis failed. Please try again.");
             console.error(err);
         } finally {
             setAnalyzing(false);

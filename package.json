@@ -9,6 +9,7 @@
         "lint": "next lint"
     },
     "dependencies": {
+        "apify-client": "^2.21.0",
         "dotenv": "^17.2.3",
         "lucide-react": "^0.263.1",
         "next": "14.2.5",

@@ -3,7 +3,7 @@ import './globals.css'
 export const metadata = {
     title: 'PGD PROJECT BY: Faith Udoka',
     subtitle: 'A PGD Project',
-    description: 'AI-powered fake comment detection using OpenRouter API',
+    description: 'AI-powered fake comment detection using OLLAMA and OpenRouter API For PGD Project',
 
 }
 
