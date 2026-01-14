@@ -2,14 +2,23 @@ export async function POST(request) {
     try {
         const { comment, postCaption } = await request.json();
 
+        // Validate inputs
+        if (!comment || !postCaption) {
+            return Response.json({ error: "Missing required fields" }, { status: 400 });
+        }
+
+        console.log("Analyzing comment via OpenRouter...");
+
         const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
             method: "POST",
             headers: {
                 "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
                 "Content-Type": "application/json",
+                "HTTP-Referer": "https://verce-deployment.com", // Optional, for OpenRouter
+                "X-Title": "Instagram Fake Comment Detector", // Optional
             },
             body: JSON.stringify({
-                model: "meta-llama/llama-3.1-8b-instruct:free",
+                model: "google/gemini-2.0-flash-exp:free",
                 messages: [
                     {
                         role: "user",
@@ -40,30 +49,43 @@ Respond in this EXACT JSON format with no additional text:
             })
         });
 
+        if (!response.ok) {
+            const errorData = await response.text();
+            console.error(`OpenRouter API Error: ${response.status} ${response.statusText}`, errorData);
+            throw new Error(`OpenRouter API failed: ${response.status} ${errorData}`);
+        }
+
         const data = await response.json();
+
+        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+            console.error("Invalid OpenRouter response structure:", JSON.stringify(data));
+            throw new Error("Invalid API response structure");
+        }
+
         const aiResponse = data.choices[0].message.content.trim();
 
         // Extract JSON from response
         const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
-            throw new Error("Invalid AI response format");
+            console.error("Could not find JSON in AI response:", aiResponse);
+            throw new Error("Invalid AI response format (no JSON found)");
         }
 
         const analysis = JSON.parse(jsonMatch[0]);
         return Response.json(analysis);
 
     } catch (error) {
-        console.error('Analysis error:', error);
+        console.error('Analysis error details:', error);
         return Response.json(
             {
                 isFake: false,
-                confidence: 50,
-                suspicionScore: 50,
+                confidence: 0,
+                suspicionScore: 0,
                 category: "unknown",
-                reasons: ["Analysis failed"],
-                explanation: "Could not complete analysis"
+                reasons: ["AI Service Unavailable: " + error.message.substring(0, 100)],
+                explanation: "The AI analysis service encountered an error. Please try again later."
             },
-            { status: 200 }
+            { status: 200 } // Return 200 so frontend displays the fallback instead of crashing
         );
     }
 }
