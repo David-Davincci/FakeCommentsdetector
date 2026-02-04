@@ -1,3 +1,5 @@
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
 export async function POST(request) {
     try {
         const { comment, postCaption } = await request.json();
@@ -7,22 +9,13 @@ export async function POST(request) {
             return Response.json({ error: "Missing required fields" }, { status: 400 });
         }
 
-        console.log("Analyzing comment via OpenRouter...");
+        console.log("Analyzing comment via Gemini API...");
 
-        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://verce-deployment.com", // Optional, for OpenRouter
-                "X-Title": "Instagram Fake Comment Detector", // Optional
-            },
-            body: JSON.stringify({
-                model: "google/gemini-2.0-flash-exp:free",
-                messages: [
-                    {
-                        role: "user",
-                        content: `You are an expert at detecting fake, spam, and bot comments on social media. Analyze this Instagram comment and determine if it's genuine or fake/spam.
+        // Initialize Gemini AI
+        const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+
+        const prompt = `You are an expert at detecting fake, spam, and bot comments on social media. Analyze this Instagram comment and determine if it's genuine or fake/spam.
 
 POST CAPTION: "${postCaption}"
 COMMENT USERNAME: "${comment.user}"
@@ -43,26 +36,11 @@ Respond in this EXACT JSON format with no additional text:
   "category": "genuine" or "spam" or "bot" or "promotional" or "generic",
   "reasons": ["reason 1", "reason 2"],
   "explanation": "brief 1-2 sentence explanation"
-}`
-                    }
-                ],
-            })
-        });
+}`;
 
-        if (!response.ok) {
-            const errorData = await response.text();
-            console.error(`OpenRouter API Error: ${response.status} ${response.statusText}`, errorData);
-            throw new Error(`OpenRouter API failed: ${response.status} ${errorData}`);
-        }
-
-        const data = await response.json();
-
-        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-            console.error("Invalid OpenRouter response structure:", JSON.stringify(data));
-            throw new Error("Invalid API response structure");
-        }
-
-        const aiResponse = data.choices[0].message.content.trim();
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const aiResponse = response.text().trim();
 
         // Extract JSON from response
         const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);

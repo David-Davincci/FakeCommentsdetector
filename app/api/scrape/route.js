@@ -22,7 +22,7 @@ export async function POST(request) {
         // Run the Actor and wait for it to finish
         const run = await client.actor("apify/instagram-comment-scraper").call({
             "directUrls": [postUrl],
-            "resultsLimit": 30, // Limit to 30 comments to save credits/time
+            "resultsLimit": 10, // Reduced to 10 comments to avoid rate limits
         });
 
         console.log(`Scrape finished. Run ID: ${run.id}`);

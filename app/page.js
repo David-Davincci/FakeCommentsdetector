@@ -42,7 +42,7 @@ export default function InstagramFakeCommentDetector() {
     };
 
     // AI-powered comment analysis
-    const analyzeCommentWithAI = async (comment, postCaption) => {
+    const analyzeCommentWithAI = async (comment, postCaption, retryCount = 0) => {
         try {
             const response = await fetch('/api/analyze', {
                 method: 'POST',
@@ -56,6 +56,12 @@ export default function InstagramFakeCommentDetector() {
             });
 
             if (!response.ok) {
+                // If rate limited and haven't retried too many times, wait and retry
+                if (response.status === 429 && retryCount < 2) {
+                    console.log(`Rate limited, waiting 10 seconds before retry ${retryCount + 1}...`);
+                    await new Promise(resolve => setTimeout(resolve, 10000));
+                    return analyzeCommentWithAI(comment, postCaption, retryCount + 1);
+                }
                 throw new Error('API request failed');
             }
 
@@ -74,8 +80,8 @@ export default function InstagramFakeCommentDetector() {
                 confidence: 50,
                 suspicionScore: 50,
                 category: "unknown",
-                reasons: ["AI analysis unavailable - check API setup"],
-                explanation: "Could not perform AI analysis. Make sure your API is configured.",
+                reasons: ["AI analysis unavailable - rate limit exceeded"],
+                explanation: "Rate limit reached. Please wait a few minutes and try again.",
                 analyzedByAI: false
             };
         }
@@ -156,6 +162,11 @@ export default function InstagramFakeCommentDetector() {
                 const analyzed = await analyzeCommentWithAI(comment, captionContext);
                 analyzedComments.push(analyzed);
 
+                // Add delay to avoid rate limiting (5 seconds between requests)
+                if (analyzedComments.length < commentsToAnalyze.length) {
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                }
+
                 // Update results incrementally (optional, but good for UX)
                 const currentFakes = analyzedComments.filter(c => c.isFake).length;
                 setResults(prev => ({
@@ -198,7 +209,7 @@ export default function InstagramFakeCommentDetector() {
                     <p className="text-gray-600">Using AI to intelligently detect fake and spam comments</p>
                     <div className="mt-2 inline-flex items-center gap-2 bg-purple-100 text-purple-800 px-4 py-2 rounded-full text-sm">
                         <Brain className="w-4 h-4" />
-                        <span className="font-semibold">Powered by OpenRouter AI</span>
+                        <span className="font-semibold">Powered by Gemini AI</span>
                     </div>
                 </div>
 
